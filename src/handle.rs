@@ -121,7 +121,7 @@ impl ResponseBuilder {
 #[no_mangle]
 pub extern "C" fn curl_read_fn(p: *u8, size: size_t, nmemb: size_t, user_data: *c_void) -> size_t {
   println!("READ {} {}", size, nmemb);
-  size * nmemb
+  0
 }
 
 #[no_mangle]

@@ -4,18 +4,21 @@
 extern crate collections;
 extern crate libc;
 
+use std::io;
 use ffi::{easy,opt};
 use ffi::err::ErrCode;
 use handle::Handle;
+use body::Body;
 
 pub use response::{Headers,Response};
 
+mod body;
 mod ffi;
 mod handle;
 mod header;
 mod response;
 
-pub fn request() -> Request {
+pub fn request<'a>() -> Request<'a> {
   Request::new()
 }
 
@@ -26,17 +29,14 @@ pub fn get(uri: &str) -> Result<Response, ErrCode> {
     .execute()
 }
 
-pub fn head(uri: &str) -> Result<Response, ErrCode> {
+pub fn post<R: Reader>(uri: &str, body: &mut R) -> Result<Response, ErrCode> {
   request()
-    .method(Head)
+    .method(Post)
     .uri(uri)
+    .header("Transfer-Encoding", "chunked")
+    .header("Expect", "")
+    .body(body)
     .execute()
-  /*
-  let mut handle = Handle::new();
-  handle.setopt(opt::URL, uri);
-  handle.setopt(opt::NOBODY, 1);
-  handle.perform()
-  */
 }
 
 pub enum Method {
@@ -50,35 +50,58 @@ pub enum Method {
   Connect
 }
 
-pub struct Request {
+pub struct Request<'a> {
   err: Option<ErrCode>,
   handle: Handle,
-  headers: ffi::List
+  headers: ffi::List,
+  body: Option<Body<'a>>
 }
 
-impl Request {
-  fn new() -> Request {
+impl<'a> Request<'a> {
+  fn new() -> Request<'a> {
     Request {
       err: None,
       handle: Handle::new(),
-      headers: ffi::List::new()
+      headers: ffi::List::new(),
+      body: None
     }
   }
 
-  pub fn method(self, method: Method) -> Request {
+  pub fn method(mut self, method: Method) -> Request<'a> {
+    macro_rules! set_method(
+      ($val:expr) => ({
+        match self.handle.setopt($val, 1) {
+          Ok(_) => {}
+          Err(e) => self.err = Some(e)
+        }
+        });
+    )
+
+    // TODO: track errors
     match method {
-      Get => {} // Nothing to do
+      Get => set_method!(opt::HTTPGET),
+      Post => set_method!(opt::POST),
       _ => { unimplemented!() }
     }
+
     self
   }
 
-  pub fn header(mut self, name: &str, val: &str) -> Request {
+  pub fn uri(mut self, uri: &str) -> Request<'a> {
+    match self.handle.setopt(opt::URL, uri) {
+      Ok(_) => {}
+      Err(e) => self.err = Some(e)
+    }
+
+    self
+  }
+
+  pub fn header(mut self, name: &str, val: &str) -> Request<'a> {
     self.append_header(name, val);
     self
   }
 
-  pub fn headers<'a, I: Iterator<(&'a str, &'a str)>>(mut self, mut hdrs: I) -> Request {
+  pub fn headers<'a, I: Iterator<(&'a str, &'a str)>>(mut self, mut hdrs: I) -> Request<'a> {
     for (name, val) in hdrs {
       self.append_header(name, val);
     }
@@ -86,7 +109,7 @@ impl Request {
     self
   }
 
-  fn append_header(&mut self, name, &str, val: &str) {
+  fn append_header(&mut self, name: &str, val: &str) {
     let mut c_str = Vec::with_capacity(name.len() + val.len() + 2);
     c_str.push_all(name.as_bytes());
     c_str.push(':' as u8);
@@ -96,12 +119,8 @@ impl Request {
     self.headers.push_bytes(c_str.as_slice());
   }
 
-  pub fn uri(mut self, uri: &str) -> Request {
-    match self.handle.setopt(opt::URL, uri) {
-      Ok(_) => {}
-      Err(e) => self.err = Some(e)
-    }
-
+  pub fn body<R: io::Reader>(mut self, r: &'a mut R) -> Request<'a> {
+    self.body = Some(Body::new(r));
     self
   }
 
@@ -115,12 +134,16 @@ impl Request {
       try!(self.handle.setopt(opt::HTTPHEADER, &self.headers));
     }
 
+    // TODO: If body is set, assign it to the handle for the read callback
+
     self.handle.perform()
   }
 }
 
 #[cfg(hax)]
 pub fn main() {
-  let resp = get("https://www.bing.com").unwrap();
+  use std::io::BufReader;
+
+  let resp = post("http://localhost:9292", &mut BufReader::new(bytes!("Hello World"))).unwrap();
   println!("resp: {}", resp);
 }
