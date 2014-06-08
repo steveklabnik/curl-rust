@@ -1,8 +1,9 @@
 use std::c_vec::CVec;
-use std::mem;
+use std::{io,mem};
 use libc::{c_long,size_t,c_void};
 use collections::HashMap;
-use super::ffi::{easy,err,info,opt};
+use super::body::Body;
+use super::ffi::{consts,easy,err,info,opt};
 use {Response,Headers,header};
 
 pub struct Handle {
@@ -24,21 +25,25 @@ impl Handle {
   }
 
   #[inline]
-  pub fn perform(&mut self) -> Result<Response, err::ErrCode> {
+  pub fn perform(&mut self, body: Option<&Body>) -> Result<Response, err::ErrCode> {
     let mut builder = ResponseBuilder::new();
 
     unsafe {
-      let p: uint = mem::transmute(&builder);
+      let resp_p: uint = mem::transmute(&builder);
+      let body_p: uint = match body {
+        Some(b) => unsafe { mem::transmute(b) },
+        None => 0
+      };
 
       // Set callback options
       easy::curl_easy_setopt(self.curl, opt::READFUNCTION, curl_read_fn);
-      easy::curl_easy_setopt(self.curl, opt::READDATA, 0);
+      easy::curl_easy_setopt(self.curl, opt::READDATA, body_p);
 
       easy::curl_easy_setopt(self.curl, opt::WRITEFUNCTION, curl_write_fn);
-      easy::curl_easy_setopt(self.curl, opt::WRITEDATA, p);
+      easy::curl_easy_setopt(self.curl, opt::WRITEDATA, resp_p);
 
       easy::curl_easy_setopt(self.curl, opt::HEADERFUNCTION, curl_header_fn);
-      easy::curl_easy_setopt(self.curl, opt::HEADERDATA, p);
+      easy::curl_easy_setopt(self.curl, opt::HEADERDATA, resp_p);
     }
 
     let err = unsafe { easy::curl_easy_perform(self.curl) };
@@ -119,9 +124,23 @@ impl ResponseBuilder {
  */
 
 #[no_mangle]
-pub extern "C" fn curl_read_fn(p: *u8, size: size_t, nmemb: size_t, user_data: *c_void) -> size_t {
-  println!("READ {} {}", size, nmemb);
-  0
+pub extern "C" fn curl_read_fn(p: *mut u8, size: size_t, nmemb: size_t, body: *mut Body) -> size_t {
+  if body.is_null() {
+    return 0;
+  }
+
+  let mut dst = unsafe { CVec::new(p, (size * nmemb) as uint) };
+  let body: &mut Body = unsafe { mem::transmute(body) };
+
+  match body.read(dst.as_mut_slice()) {
+    Ok(len) => len as size_t,
+    Err(e) => {
+      match e.kind {
+        io::EndOfFile => 0 as size_t,
+        _ => consts::CURL_READFUNC_ABORT as size_t
+      }
+    }
+  }
 }
 
 #[no_mangle]

@@ -18,6 +18,9 @@ mod handle;
 mod header;
 mod response;
 
+#[cfg(test)]
+mod test;
+
 pub fn request<'a>() -> Request<'a> {
   Request::new()
 }
@@ -33,7 +36,8 @@ pub fn post<R: Reader>(uri: &str, body: &mut R) -> Result<Response, ErrCode> {
   request()
     .method(Post)
     .uri(uri)
-    .header("Transfer-Encoding", "chunked")
+    // .header("Transfer-Encoding", "chunked")
+    // .header("Content-Type", "text/plain")
     .header("Expect", "")
     .body(body)
     .execute()
@@ -120,7 +124,7 @@ impl<'a> Request<'a> {
   }
 
   pub fn body<R: io::Reader>(mut self, r: &'a mut R) -> Request<'a> {
-    self.body = Some(Body::new(r));
+    self.body = Some(Body::new(r as &mut io::Reader));
     self
   }
 
@@ -134,16 +138,6 @@ impl<'a> Request<'a> {
       try!(self.handle.setopt(opt::HTTPHEADER, &self.headers));
     }
 
-    // TODO: If body is set, assign it to the handle for the read callback
-
-    self.handle.perform()
+    self.handle.perform(self.body.as_ref())
   }
-}
-
-#[cfg(hax)]
-pub fn main() {
-  use std::io::BufReader;
-
-  let resp = post("http://localhost:9292", &mut BufReader::new(bytes!("Hello World"))).unwrap();
-  println!("resp: {}", resp);
 }

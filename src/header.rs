@@ -146,7 +146,7 @@ static TOKEN: &'static [u8] = &[
 
 #[inline]
 fn is_token(c: u8) -> bool {
-  TOKEN[c as uint] > 0
+  c < 128 && TOKEN[c as uint] > 0
 }
 
 #[inline]
@@ -164,7 +164,7 @@ mod test {
   use std::str;
   use super::parse;
 
-  fn parse_str<'a>(s: &'a str) -> (&'a [u8], &'a [u8]) {
+  fn parse_str<'a>(s: &'a str) -> (&'a str, &'a str) {
     parse(s.as_bytes()).unwrap()
   }
 
@@ -172,40 +172,40 @@ mod test {
   pub fn test_basic_header() {
     let (name, val) = parse_str("foo: bar");
 
-    assert!(name == "foo".as_bytes());
-    assert!(val == "bar".as_bytes());
+    assert!(name == "foo");
+    assert!(val == "bar");
   }
 
   #[test]
   pub fn test_basic_header_with_crlf() {
     let (name, val) = parse_str("foo: bar\r\n");
 
-    assert!(name == "foo".as_bytes());
-    assert!(val == "bar".as_bytes());
+    assert!(name == "foo");
+    assert!(val == "bar");
   }
 
   #[test]
   pub fn test_header_with_extra_spacing() {
     let (name, val) = parse_str(" \tfoo  :bar \t\r");
 
-    assert!(name == "foo".as_bytes());
-    assert!(val == "bar".as_bytes());
+    assert!(name == "foo");
+    assert!(val == "bar");
   }
 
   #[test]
   pub fn test_header_without_value() {
     let (name, val) = parse_str("foo:");
 
-    assert!(name == "foo".as_bytes());
-    assert!(val == "".as_bytes());
+    assert!(name == "foo");
+    assert!(val == "");
   }
 
   #[test]
   pub fn test_header_value_with_spacing_characters() {
     let (name, val) = parse_str("foo: blah@example.com\r\n");
 
-    assert!(name == "foo".as_bytes());
-    assert!(val == "blah@example.com".as_bytes());
+    assert!(name == "foo");
+    assert!(val == "blah@example.com");
   }
 
   #[test]
@@ -216,6 +216,7 @@ mod test {
 
   #[test]
   pub fn test_parsing_invalid_bytes() {
-    let res = parse(bytes!("foo: zo" 156 "mg"));
+    let res = parse(bytes!("fo", 156, "o: zomg"));
+    assert!(res.is_none());
   }
 }
