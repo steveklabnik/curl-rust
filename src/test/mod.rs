@@ -3,7 +3,7 @@
 mod server;
 
 macro_rules! server(
-  ($($ops:expr),+) => (server::server(ops!($($ops),+)));
+  ($($ops:expr),+) => (server::setup(ops!($($ops),+)));
 )
 
 macro_rules! ops(
