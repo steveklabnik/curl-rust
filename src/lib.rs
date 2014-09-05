@@ -8,6 +8,8 @@ extern crate url;
 #[phase(plugin, link)]
 extern crate log;
 
+#[phase(plugin)] extern crate link_config = "link-config";
+
 pub use ffi::easy::ProgressCb;
 pub use ffi::err::ErrCode;
 

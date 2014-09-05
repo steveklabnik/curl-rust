@@ -11,7 +11,8 @@ use http::{header,Response};
 type CURL = c_void;
 pub type ProgressCb<'a> = |uint, uint, uint, uint|:'a -> ();
 
-#[link(name = "curl")]
+link_config!("libcurl", ["favor_static"])
+
 extern {
     pub fn curl_easy_init() -> *mut CURL;
     pub fn curl_easy_setopt(curl: *mut CURL, option: opt::Opt, ...) -> ErrCode;
