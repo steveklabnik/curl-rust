@@ -18,5 +18,5 @@ pub fn test_simple_get() {
   // assert!(srv.recv());
   // assert!(res.is_success());
 
-  // fail!("nope");
+  // panic!("nope");
 }
